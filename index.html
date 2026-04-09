@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Pro Image Compressor</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+
+<style>
+body { background: #f5f7fa; font-family:sans-serif; }
+header { background: #fff; padding: 10px 30px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); position: sticky; top:0; z-index:10;}
+.drop-area { border:2px dashed #6c757d; padding:40px; text-align:center; cursor:pointer; border-radius:10px; background:#fff; transition:0.3s; }
+.drop-area:hover { background:#f1f3f6; }
+img { max-width:120px; margin:5px; cursor:pointer; border:1px solid #ccc; border-radius:5px; }
+#lightbox { position:fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.8); display:none; justify-content:center; align-items:center; z-index:1000; }
+#lightbox img { max-width:90%; max-height:90%; border-radius:10px; }
+#lightbox span { position:absolute; top:20px; right:30px; font-size:30px; color:#fff; cursor:pointer; }
+.card-compress { background:#fff; padding:20px; border-radius:10px; box-shadow:0 2px 10px rgba(0,0,0,0.05);}
+#loaderOverlay { position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(255,255,255,0.7); display: none; justify-content:center; align-items:center; z-index: 2000; }
+.spinner-border { width: 4rem; height: 4rem; }
+@media(max-width:768px){ img { max-width:80px; } }
+</style>
+</head>
+<body>
+
+<header class="d-flex justify-content-between align-items-center flex-wrap">
+  <div class="d-flex align-items-center mb-2">
+    <img src="/mnt/data/7e4a041c-5100-4c9b-b1c3-72f998055ef0.png" alt="Logo" style="height:40px; margin-right:10px;">
+    <h5 class="mb-0">Pro Image Compressor</h5>
+  </div>
+</header>
+
+<div class="container mt-5">
+  <div class="card-compress">
+    <h3 class="text-center mb-4">📸 Upload & Compress Images/PDFs</h3>
+    <div class="drop-area mb-3" id="dropArea">Drag & Drop Files Here <br> or Click to Upload</div>
+
+    <div class="mb-3">
+      <label class="form-label">Target Size per Image (KB) <small>(Optional)</small></label>
+      <input type="number" id="targetSize" class="form-control" placeholder="e.g. 50">
+    </div>
+
+    <div class="text-center mb-3">
+      <button class="btn btn-primary" id="compressBtn">Compress & Prepare ZIP</button>
+    </div>
+
+    <div class="row mt-4" id="preview"></div>
+  </div>
+</div>
+
+<div id="loaderOverlay">
+  <div class="spinner-border text-primary" role="status">
+    <span class="visually-hidden">Loading...</span>
+  </div>
+</div>
+
+<div id="lightbox">
+  <span id="closeBtn">&times;</span>
+  <img id="lightboxImg" src="">
+</div>
+
+<footer>
+  &copy; 2026 Pro Image Compressor | All rights reserved
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://unpkg.com/browser-image-compression@1.0.17/dist/browser-image-compression.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+
+<script>
+let files = [];
+const dropArea = document.getElementById('dropArea');
+const compressBtn = document.getElementById('compressBtn');
+const preview = document.getElementById('preview');
+const lightbox = document.getElementById('lightbox');
+const lightboxImg = document.getElementById('lightboxImg');
+const closeBtn = document.getElementById('closeBtn');
+const loaderOverlay = document.getElementById('loaderOverlay');
+
+/// 1️⃣ Page load pe ek input create karo (hidden)
+const fileInput = document.createElement('input');
+fileInput.type = 'file';
+fileInput.multiple = true;
+fileInput.accept = 'image/*,application/pdf';
+fileInput.style.display = 'none';
+document.body.appendChild(fileInput);
+
+// 2️⃣ File selection handle karo
+fileInput.onchange = e => {
+    handleFiles(e.target.files);
+    fileInput.value = ""; // 🔹 Important fix for mobile
+};
+
+// 3️⃣ DropArea click pe input trigger karo
+dropArea.addEventListener('click', () => {
+    fileInput.click();
+});
+
+// Drag & drop
+dropArea.addEventListener('dragover', e => e.preventDefault());
+dropArea.addEventListener('drop', e => { 
+  e.preventDefault(); 
+  handleFiles(e.dataTransfer.files);
+  e.dataTransfer.clearData(); // reset for next drag
+});
+
+// Preview function
+function handleFiles(fileList) {
+  files = Array.from(fileList);
+  preview.innerHTML = "";
+
+  files.forEach(file => {
+    const col = document.createElement('div');
+    col.className = "col-6 col-md-4 col-lg-3 text-center mb-4";
+
+    if (file.type.startsWith("image/")) {
+      const img = document.createElement('img');
+      img.src = URL.createObjectURL(file);
+      img.title = "Click to view full size (Original)";
+      img.onclick = () => showLightbox(img.src);
+      col.appendChild(img);
+    } else if (file.type === "application/pdf") {
+      const icon = document.createElement('p');
+      icon.innerText = "📄 " + file.name;
+      col.appendChild(icon);
+    }
+
+    const text = document.createElement('p');
+    text.innerHTML = `<strong>${file.name}</strong><br>Size: ${(file.size/1024).toFixed(1)} KB`;
+    col.appendChild(text);
+
+    preview.appendChild(col);
+  });
+}
+
+// Lightbox
+function showLightbox(src) { lightbox.style.display = "flex"; lightboxImg.src = src; }
+closeBtn.onclick = () => { lightbox.style.display = "none"; }
+lightbox.onclick = (e) => { if(e.target === lightbox) lightbox.style.display = "none"; }
+
+// Compress function
+async function compressToTarget(file, targetKB = null) {
+  if (!file.type.startsWith("image/")) return file;
+
+  if(!targetKB) targetKB = Math.round((file.size / 1024) * 0.3);
+
+  const options = {
+    maxSizeMB: targetKB/1024,
+    maxWidthOrHeight: 1920,
+    initialQuality: 0.95,
+    useWebWorker: true
+  };
+
+  try {
+    const compressed = await imageCompression(file, options);
+    return compressed;
+  } catch(e) {
+    console.log("Compression failed, returning original file:", e);
+    return file;
+  }
+}
+
+// Compress button
+compressBtn.addEventListener('click', async () => {
+  if (!files.length) return alert("No files selected");
+  const targetSize = parseInt(document.getElementById('targetSize').value);
+
+  loaderOverlay.style.display = "flex";
+
+  preview.innerHTML = "";
+  const zip = new JSZip();
+
+  for (let file of files) {
+    let finalFile = targetSize ? await compressToTarget(file,targetSize) : await compressToTarget(file);
+    zip.file(file.name, finalFile);
+
+    const col = document.createElement('div');
+    col.className = "col-6 col-md-4 col-lg-3 text-center mb-4";
+
+    if(file.type.startsWith("image/")) {
+      const before = document.createElement('img'); 
+      before.src = URL.createObjectURL(file); 
+      before.title="Original"; 
+      before.onclick = () => showLightbox(before.src);
+
+      const after = document.createElement('img'); 
+      after.src = URL.createObjectURL(finalFile); 
+      after.title="Compressed"; 
+      after.onclick = () => showLightbox(after.src);
+
+      col.appendChild(before); 
+      col.appendChild(document.createElement('br')); 
+      col.appendChild(after);
+    } else {
+      const icon = document.createElement('p'); 
+      icon.innerText = "📄 "+file.name; 
+      col.appendChild(icon);
+    }
+
+    const text = document.createElement('p');
+    text.innerHTML = `<strong>${file.name}</strong><br>Before: ${(file.size/1024).toFixed(1)} KB<br>After: ${(finalFile.size/1024).toFixed(1)} KB`;
+    col.appendChild(text);
+    preview.appendChild(col);
+  }
+
+  const btn = document.createElement('button');
+  btn.className = "btn btn-success mt-3";
+  btn.innerText = "Download ZIP";
+  btn.onclick = async () => {
+    const blob = await zip.generateAsync({type:"blob"});
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = "compressed_files.zip";
+    link.click();
+  };
+  preview.appendChild(btn);
+
+  loaderOverlay.style.display = "none";
+  alert("Compression done! Click on any image to view full size.");
+});
+</script>
+</body>
+</html>
